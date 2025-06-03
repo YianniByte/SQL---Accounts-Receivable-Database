@@ -1,3 +1,4 @@
+-- Customer table to collect customer data (would be confidential)
 CREATE TABLE IF NOT EXISTS "customer" (
     "id" SERIAL PRIMARY KEY,
     "first_name" VARCHAR(60) NOT NULL,
@@ -9,6 +10,7 @@ CREATE TABLE IF NOT EXISTS "customer" (
     "phone_number" TEXT
 );
 
+--Table for invoices by this business to customers
 CREATE TABLE IF NOT EXISTS "invoice" (
     "id" SERIAL PRIMARY KEY,
     "customer_id" INTEGER NOT NULL,
@@ -18,13 +20,17 @@ CREATE TABLE IF NOT EXISTS "invoice" (
     FOREIGN KEY ("customer_id") REFERENCES "customer" ("id")
 );
 
+--Table for the items that are to be included in each invoice
 CREATE TABLE IF NOT EXISTS "items" (
     "id" SERIAL PRIMARY KEY,
     "item_name" TEXT,
     "unit_price(£)" NUMERIC (12,2)
 );
+
+--New attribute types to be used in this payments table
 CREATE TYPE "pay_method" AS ENUM ('debit', 'credit');
 CREATE TYPE "status" AS ENUM ('paid', 'partial', 'pending');
+--Table to store payment details by customers for different invoices
 CREATE TABLE IF NOT EXISTS "payments" (
     "id" SERIAL PRIMARY KEY,
     "invoice_number" INTEGER NOT NULL,
@@ -36,7 +42,7 @@ CREATE TABLE IF NOT EXISTS "payments" (
     FOREIGN KEY ("invoice_number") REFERENCES "invoice" ("id"),
     FOREIGN KEY ("customer_number") REFERENCES "customer" ("id")
 );
-
+--An aggregated final invoice with subtotal and grand total after tax that can then be queried per customer ID
 CREATE TABLE IF NOT EXISTS "item_group" (
    "id" SERIAL PRIMARY KEY,
    "invoice_num" INTEGER,
@@ -48,14 +54,14 @@ CREATE TABLE IF NOT EXISTS "item_group" (
    FOREIGN KEY ("invoice_num") REFERENCES "invoice" ("id"),
    FOREIGN KEY ("item_number") REFERENCES "items" ("id")
 );
-
+--An aggregated final invoice with subtotal and grand total after tax that can then be queried per customer ID
 CREATE OR REPLACE VIEW "invoice_final" AS
     SELECT "customer_id", "date", "due_date", "subject", "tax(%)", "item_group"."group_total(£)", (("item_group"."group_total(£)" * "tax(%)")/100) AS "tax_amount", ("item_group"."group_total(£)" + (("item_group"."group_total(£)" * "tax(%)")/100)) AS "grand_total(£)"
     FROM "invoice"
     JOIN "item_group" ON "invoice"."id" = "item_group"."invoice_num"
     GROUP BY "customer_id", "date","due_date", "subject", "tax(%)", "item_group"."group_total(£)"; 
---making a large invoice that can then be queried per customer ID
 
+--An accounts receivable ageing report to partition the data in different quarters (from approximate current date) for the financial year.
 CREATE OR REPLACE VIEW "AR_Ageing_Report" AS 
     SELECT "first_name", "last_name", "invoice_number", "invoice"."date", 
     "invoice"."due_date", (CURRENT_DATE - "invoice"."due_date") AS "age", "grand_total(£)", 
@@ -73,6 +79,7 @@ CREATE OR REPLACE VIEW "AR_Ageing_Report" AS
     LEFT JOIN "payments" ON "payments"."invoice_number" = "invoice"."id"
     JOIN "invoice_final" ON "invoice_final"."customer_id" = "payments"."customer_number";
 
+--indexes for the most likely queries
 CREATE INDEX "find_customer_names" ON "customer" ("first_name", "last_name");
 CREATE INDEX "find_customer_id_from_invoice" ON "invoice" ("customer_id");
 CREATE INDEX "find_due_date_invoice" ON "invoice" ("due_date");
